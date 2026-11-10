@@ -1,0 +1,85 @@
+{
+    "name": "ernestdefoe/bingo",
+    "description": "Bingo: play along with live events. Each member gets their own shuffled 5×5 card from a pool of squares, marks what happens, and calls Bingo in the watch-along discussion, with server-checked claims, disputes, host-confirmed squares, live updates and a winners list.",
+    "keywords": [
+        "flarum",
+        "flarum-extension",
+        "bingo",
+        "game",
+        "watch party",
+        "live events",
+        "game day"
+    ],
+    "type": "flarum-extension",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Ernest Defoe",
+            "email": "ernestdefoe@gmail.com"
+        }
+    ],
+    "homepage": "https://github.com/ernestdefoe/bingo",
+    "support": {
+        "issues": "https://github.com/ernestdefoe/bingo/issues",
+        "source": "https://github.com/ernestdefoe/bingo"
+    },
+    "funding": [
+        {
+            "type": "other",
+            "url": "https://buymeacoffee.com/ernestdefoe"
+        }
+    ],
+    "require": {
+        "php": "^8.3",
+        "flarum/core": "^2.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "ErnestDefoe\\Bingo\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "ErnestDefoe\\Bingo\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "flarum-extension": {
+            "title": "Bingo",
+            "category": "feature",
+            "icon": {
+                "name": "fas fa-table-cells",
+                "backgroundColor": "#be185d",
+                "color": "#fff"
+            },
+            "optional-dependencies": [
+                "flarum/gdpr",
+                "flarum/realtime"
+            ]
+        }
+    },
+    "require-dev": {
+        "flarum/gdpr": "^2.0",
+        "flarum/phpstan": "^2.0",
+        "flarum/testing": "^2.0"
+    },
+    "scripts": {
+        "test": [
+            "@test:integration"
+        ],
+        "test:integration": "phpunit -c tests/phpunit.integration.xml",
+        "test:setup": "@php tests/integration/setup.php",
+        "analyse:phpstan": "phpstan analyse"
+    },
+    "scripts-descriptions": {
+        "test": "Runs all tests.",
+        "test:integration": "Runs all integration tests.",
+        "test:setup": "Sets up a database for use with integration tests. Execute this only once.",
+        "analyse:phpstan": "Run static analysis"
+    },
+    "config": {
+        "sort-packages": true
+    },
+    "minimum-stability": "beta",
+    "prefer-stable": true
+}

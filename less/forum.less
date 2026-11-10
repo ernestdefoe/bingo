@@ -1,0 +1,949 @@
+// Bingo. Every colour comes from Flarum's CSS properties so themes and dark
+// mode carry through; the few literals (live red, confirmed green, medal
+// gold) always set their own text colour too.
+
+@bingo-live: #dc2626;
+@bingo-ok: #16a34a;
+@bingo-gold: #f59e0b;
+
+// ── shared bits ──────────────────────────────────────────────────
+
+.BingoStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: bold;
+  line-height: 20px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  background: var(--control-bg);
+  color: var(--control-color);
+
+  &--live {
+    background: @bingo-live;
+    color: #fff;
+  }
+  &--finished {
+    color: var(--muted-color);
+  }
+}
+.BingoStatus-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #fff;
+  animation: bingo-pulse 1.4s ease-in-out infinite;
+}
+@keyframes bingo-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.7); }
+}
+
+.BingoClock {
+  color: var(--muted-color);
+  font-size: 13px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.BingoChip {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+  white-space: nowrap;
+  background: var(--control-bg);
+  color: var(--control-color);
+
+  &--accepted {
+    background: @bingo-ok;
+    color: #fff;
+  }
+  &--rejected {
+    background: var(--control-bg);
+    color: var(--muted-color);
+    text-decoration: line-through;
+  }
+  &--disputed {
+    background: @bingo-gold;
+    color: #1f1300;
+  }
+}
+
+.BingoPerson,
+a.BingoPerson,
+a.BingoPerson:hover {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  color: var(--text-color);
+  font-weight: 600;
+  text-decoration: none;
+  vertical-align: middle;
+
+  .Avatar {
+    flex-shrink: 0;
+  }
+}
+.BingoPerson-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.BingoEmpty {
+  color: var(--muted-color);
+  text-align: center;
+  padding: 30px 0;
+
+  &--big .icon {
+    font-size: 48px;
+    opacity: 0.4;
+    margin-bottom: 10px;
+  }
+}
+
+// ── the card ─────────────────────────────────────────────────────
+
+.BingoCard {
+  background: var(--control-bg);
+  color: var(--text-color);
+  border-radius: 18px;
+  padding: 10px;
+  max-width: 560px;
+  margin: 0 auto;
+}
+.BingoCard-head {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 6px;
+
+  span {
+    text-align: center;
+    font-weight: 900;
+    font-size: 22px;
+    line-height: 34px;
+    border-radius: 10px;
+    background: var(--button-primary-bg, var(--primary-color));
+    color: var(--button-primary-color, #fff);
+  }
+}
+.BingoCard-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+.BingoCell {
+  position: relative;
+  aspect-ratio: 1;
+  min-width: 0;
+  min-height: 56px;
+  margin: 0;
+  padding: 5px 4px;
+  border: 1px solid var(--control-bg-shaded, var(--control-bg));
+  border-radius: 12px;
+  background: var(--body-bg);
+  color: var(--text-color);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.15;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  cursor: pointer;
+  user-select: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s, color 0.15s, transform 0.1s;
+
+  &:active:not([disabled]) {
+    transform: scale(0.95);
+  }
+  &:focus-visible {
+    outline: 3px solid var(--primary-color);
+    outline-offset: 2px;
+  }
+  &[disabled] {
+    cursor: default;
+  }
+  &.is-mid {
+    font-size: 11.5px;
+  }
+  &.is-long {
+    font-size: 10px;
+    font-weight: 500;
+  }
+  &.is-marked {
+    background: var(--button-primary-bg, var(--primary-color));
+    color: var(--button-primary-color, #fff);
+    border-color: transparent;
+  }
+  &.is-line {
+    box-shadow: 0 0 0 3px @bingo-gold;
+    animation: bingo-glow 1.6s ease-in-out infinite;
+  }
+  &.is-free {
+    cursor: default;
+    background: var(--control-bg-shaded, var(--control-bg));
+    color: var(--control-color);
+    flex-direction: column;
+    gap: 2px;
+  }
+}
+.BingoCell-label {
+  position: relative;
+  z-index: 1;
+  overflow-wrap: anywhere;
+  hyphens: auto;
+  display: -webkit-box;
+  -webkit-line-clamp: 5;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+// The stamp: a ring that lands when a cell is marked.
+.BingoCell-dab {
+  position: absolute;
+  inset: 7%;
+  border-radius: 50%;
+  border: 3px solid currentColor;
+  opacity: 0;
+  transform: scale(1.6) rotate(-20deg);
+  transition: opacity 0.18s, transform 0.18s cubic-bezier(0.2, 1.6, 0.4, 1);
+  pointer-events: none;
+}
+.BingoCell.is-marked .BingoCell-dab {
+  opacity: 0.28;
+  transform: scale(1) rotate(-8deg);
+}
+.BingoCell-confirmed {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  z-index: 2;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: @bingo-ok;
+  color: #fff;
+  font-size: 9px;
+  line-height: 16px;
+  text-align: center;
+}
+.BingoCell-star {
+  color: @bingo-gold;
+  font-size: 22px;
+}
+@keyframes bingo-glow {
+  0%, 100% { box-shadow: 0 0 0 3px @bingo-gold; }
+  50% { box-shadow: 0 0 0 3px @bingo-gold, 0 0 14px 2px fade(@bingo-gold, 60%); }
+}
+
+.BingoCard-foot {
+  text-align: center;
+  padding: 12px 4px 4px;
+}
+.BingoCard-note {
+  margin: 0 0 10px;
+  color: var(--text-color);
+  font-weight: 600;
+}
+.BingoCall {
+  width: 100%;
+  min-height: 52px;
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-radius: 14px;
+
+  &.is-ready:not([disabled]) {
+    animation: bingo-ready 1.2s ease-in-out infinite;
+  }
+}
+@keyframes bingo-ready {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 fade(@bingo-gold, 70%); }
+  50% { transform: scale(1.03); box-shadow: 0 0 0 8px fade(@bingo-gold, 0%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .BingoStatus-dot,
+  .BingoCell.is-line,
+  .BingoCall.is-ready:not([disabled]) {
+    animation: none;
+  }
+}
+
+// ── confetti ─────────────────────────────────────────────────────
+
+.BingoConfetti {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10000;
+  overflow: hidden;
+
+  span {
+    position: absolute;
+    width: 8px;
+    height: 13px;
+    border-radius: 2px;
+    animation: bingo-confetti 1.9s cubic-bezier(0.15, 0.6, 0.4, 1) both;
+  }
+}
+@keyframes bingo-confetti {
+  0% { transform: translate(0, 0) rotate(0); opacity: 1; }
+  35% { transform: translate(calc(var(--dx) * 0.7), var(--dy)) rotate(calc(var(--r) * 0.4)); opacity: 1; }
+  100% { transform: translate(var(--dx), calc(var(--dy) + 340px)) rotate(var(--r)); opacity: 0; }
+}
+
+// ── game page ────────────────────────────────────────────────────
+
+.BingoGame {
+  color: var(--text-color);
+  padding-bottom: 30px;
+}
+.BingoGame-head {
+  margin-bottom: 20px;
+}
+.BingoGame-kicker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.BingoGame .BingoGame-title {
+  margin: 10px 0 6px;
+  font-size: 26px;
+  line-height: 1.2;
+  color: var(--heading-color, var(--text-color));
+  overflow-wrap: anywhere;
+}
+.BingoGame-meta {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  color: var(--muted-color);
+  font-size: 13px;
+
+  li {
+    min-width: 0;
+    max-width: 100%;
+  }
+  a,
+  a:hover {
+    color: var(--muted-color);
+    font-weight: 600;
+  }
+}
+.BingoGame-description {
+  white-space: pre-wrap;
+  margin: 8px 0;
+  overflow-wrap: anywhere;
+}
+.BingoGame-rules {
+  color: var(--muted-color);
+  font-size: 13px;
+  margin: 8px 0;
+}
+.BingoGame-manage {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.BingoGame-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+
+  @media @phone, @tablet {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.BingoPodium {
+  list-style: none;
+  margin: 0 0 20px;
+  padding: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px 26px;
+  border-radius: 16px;
+  background: var(--control-bg);
+  color: var(--text-color);
+}
+.BingoPodium-place {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+}
+.BingoPodium-medal {
+  font-size: 34px;
+  line-height: 1;
+}
+.BingoPodium-label {
+  font-size: 12px;
+  color: var(--muted-color);
+}
+
+.BingoJoin {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  padding: 20px;
+  border-radius: 18px;
+  background: var(--control-bg);
+  color: var(--text-color);
+
+  h2 {
+    margin: 0 0 8px;
+    color: var(--text-color);
+  }
+  @media @phone {
+    flex-direction: column;
+    text-align: center;
+  }
+}
+.BingoJoin-preview {
+  flex-shrink: 0;
+  display: grid;
+  grid-template-columns: repeat(5, 22px);
+  gap: 4px;
+
+  span {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    background: var(--body-bg);
+  }
+  .is-free {
+    background: @bingo-gold;
+  }
+}
+.BingoJoin-button {
+  margin-top: 6px;
+}
+
+.BingoPanel {
+  background: var(--body-bg);
+  color: var(--text-color);
+  border: 1px solid var(--control-bg);
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 16px;
+}
+.BingoPanel .BingoPanel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  font-size: 15px;
+  color: var(--text-color);
+}
+.BingoPanel-count {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: normal;
+  color: var(--muted-color);
+}
+.BingoPanel-empty {
+  color: var(--muted-color);
+  margin: 0;
+}
+
+.BingoCalls-list,
+.BingoLeaders-list,
+.BingoSquares-list,
+.BingoCall-squares,
+.BingoBoard-list,
+.BingoCardModal-calls {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.BingoCall-row {
+  padding: 10px 0;
+  border-top: 1px solid var(--control-bg);
+
+  &:first-child {
+    border-top: 0;
+    padding-top: 0;
+  }
+  &.is-rejected {
+    opacity: 0.7;
+  }
+}
+.BingoCall-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+.BingoCall-what {
+  color: var(--muted-color);
+  font-size: 13px;
+}
+.BingoCall-chips {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: auto;
+}
+.BingoCall-toggle {
+  background: none;
+  border: 0;
+  padding: 4px 0;
+  color: var(--muted-color);
+  font-size: 12px;
+  cursor: pointer;
+}
+.BingoCall-squares li {
+  font-size: 13px;
+  padding: 2px 0;
+  color: var(--text-color);
+
+  &.is-confirmed .icon {
+    color: @bingo-ok;
+  }
+}
+.BingoCall-note {
+  font-style: italic;
+  color: var(--muted-color);
+  margin: 4px 0 0;
+}
+.BingoCall-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.BingoLeaders-hot {
+  font-weight: bold;
+  color: var(--text-color);
+  margin: 0 0 8px;
+}
+.BingoLeaders-list li,
+.BingoBoard-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  min-width: 0;
+}
+.BingoAway {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--muted-color);
+  white-space: nowrap;
+
+  &.is-hot {
+    color: @bingo-live;
+    font-weight: bold;
+  }
+}
+
+.BingoSquares-filter {
+  margin-bottom: 8px;
+}
+.BingoSquares-list {
+  max-height: 520px;
+  overflow-y: auto;
+}
+.BingoSquare {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  margin-bottom: 4px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--control-bg);
+  color: var(--text-color);
+  font-size: 13px;
+
+  > :not(.BingoSquare-bar) {
+    position: relative;
+  }
+  &.is-confirmed .BingoSquare-label .icon {
+    color: @bingo-ok;
+  }
+  .Button {
+    flex-shrink: 0;
+  }
+}
+.BingoSquare-bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: var(--primary-color);
+  opacity: 0.14;
+  transition: width 0.4s;
+}
+.BingoSquare-label {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.BingoSquare-crowd {
+  flex-shrink: 0;
+  color: var(--muted-color);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+// ── hub ──────────────────────────────────────────────────────────
+
+.BingoHub,
+.BingoHub-head {
+  color: var(--text-color);
+}
+.BingoHub-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.BingoHubPage .BingoHub-title {
+  margin: 0 0 4px;
+  font-size: 26px;
+  color: var(--heading-color, var(--text-color));
+}
+.BingoHub-lead {
+  margin: 0;
+  color: var(--muted-color);
+}
+.BingoHub-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 24px;
+  align-items: start;
+
+  @media @phone, @tablet {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.BingoHub-layout > .BingoHub-lists:only-child {
+  grid-column: ~"1 / -1";
+}
+.BingoHubPage .BingoHub-sectionTitle {
+  font-size: 13px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted-color);
+  margin: 0 0 10px;
+}
+.BingoHub-section {
+  margin-bottom: 26px;
+}
+.BingoHub-more {
+  display: block;
+  margin: 0 auto;
+}
+.BingoTiles {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(~"min(240px, 100%)", 1fr));
+  gap: 12px;
+
+  > li {
+    min-width: 0;
+  }
+}
+.BingoTiles .BingoTile,
+.BingoTiles .BingoTile:hover {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 100%;
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--control-bg);
+  color: var(--text-color);
+  text-decoration: none;
+}
+.BingoTiles .BingoTile:hover {
+  background: var(--control-bg-shaded, var(--control-bg));
+}
+.BingoTile--live {
+  box-shadow: inset 4px 0 0 @bingo-live;
+}
+.BingoTile-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.BingoTile-players,
+.BingoTile-discussion {
+  color: var(--muted-color);
+  font-size: 13px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.BingoTile-title {
+  font-size: 16px;
+  font-weight: bold;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.BingoTile-mine {
+  font-size: 13px;
+  font-weight: 600;
+
+  &.is-hot {
+    color: @bingo-live;
+  }
+}
+.BingoTile-winners {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+.BingoTile-winner {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.BingoBoard {
+  background: var(--control-bg);
+  color: var(--text-color);
+  border-radius: 14px;
+  padding: 14px;
+}
+.BingoBoard-rank {
+  width: 20px;
+  flex-shrink: 0;
+  text-align: center;
+  font-weight: bold;
+  color: var(--muted-color);
+}
+.BingoBoard-score {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-weight: bold;
+  white-space: nowrap;
+}
+.BingoBoard-podiums {
+  font-weight: normal;
+  color: var(--muted-color);
+}
+
+// ── discussion: strip under the title, posts in the stream ────────
+
+.DiscussionHero .BingoStrips {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 680px;
+  margin: 14px auto 0;
+  text-align: left;
+}
+.DiscussionHero .BingoStrip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  background: var(--body-bg);
+  color: var(--text-color);
+  box-shadow: 0 2px 8px var(--shadow-color, rgba(0, 0, 0, 0.12));
+  min-width: 0;
+
+  &--live {
+    box-shadow: inset 4px 0 0 @bingo-live, 0 2px 8px var(--shadow-color, rgba(0, 0, 0, 0.12));
+  }
+}
+.DiscussionHero .BingoStrip-icon {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--button-primary-bg, var(--primary-color));
+  color: var(--button-primary-color, #fff);
+  font-size: 18px;
+}
+.DiscussionHero .BingoStrip-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.DiscussionHero .BingoStrip-title,
+.DiscussionHero .BingoStrip-title:hover {
+  color: var(--text-color);
+  font-weight: bold;
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.DiscussionHero .BingoStrip-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  color: var(--muted-color);
+  font-size: 13px;
+}
+.DiscussionHero .BingoStrip-play {
+  flex-shrink: 0;
+}
+@media @phone {
+  .DiscussionHero .BingoStrips {
+    margin-top: 10px;
+  }
+  .DiscussionHero .BingoStrip .BingoStrip-play .Button-label {
+    white-space: nowrap;
+  }
+}
+
+.BingoPost {
+  .BingoPost-game {
+    font-weight: bold;
+  }
+  .BingoChip {
+    margin-left: 4px;
+  }
+}
+.BingoPost-labels {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--muted-color);
+}
+.BingoPost-winners {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-weight: 600;
+  color: var(--text-color);
+}
+.BingoPost-play {
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+// ── modals ───────────────────────────────────────────────────────
+
+.BingoCardModal {
+  .Modal-body {
+    padding: 14px 16px 20px;
+  }
+  @media @phone {
+    .Modal-body {
+      padding: 10px 10px 20px;
+    }
+    .BingoCard {
+      padding: 6px;
+    }
+    .BingoCard-grid,
+    .BingoCard-head {
+      gap: 5px;
+    }
+  }
+}
+.BingoCardModal-kicker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 12px;
+  color: var(--muted-color);
+  font-size: 13px;
+}
+.BingoCardModal-calls {
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--muted-color);
+
+  li {
+    padding: 3px 0;
+  }
+}
+.BingoCardModal-more {
+  margin: 12px 0 0;
+  text-align: center;
+}
+.BingoCardModal-note {
+  text-align: center;
+  color: var(--muted-color);
+}
+
+.BingoGameModal-squares {
+  font-size: 13px;
+  line-height: 1.5;
+}
+.BingoGameModal-templates {
+  margin-bottom: 6px;
+}
+.BingoGameModal-count {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--muted-color);
+
+  &.is-short {
+    color: @bingo-live;
+    font-weight: bold;
+  }
+}
+.BingoGameModal-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+}
+.BingoGameModal-free {
+  flex: 1;
+  min-width: 140px;
+}
+.BingoGameModal-times {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+
+  > label {
+    flex: 1 1 200px;
+    min-width: 0;
+  }
+  .Select {
+    display: block;
+    width: 100%;
+  }
+}
