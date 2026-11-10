@@ -101,7 +101,7 @@ export default class GamePage extends Page {
           {game.discussion && (
             <li>
               <Link href={app.route('discussion', { id: game.discussion.slug })}>
-                <Icon name="far fa-comments" /> {game.discussion.title}
+                <Icon name="far fa-comments" /> <span>{game.discussion.title}</span>
               </Link>
             </li>
           )}

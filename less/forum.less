@@ -98,6 +98,9 @@ a.BingoPerson:hover {
   --size: 32px;
 }
 .BingoPerson-name {
+  // On the text itself, not the link: themes colour every <a> (Bespoke at 0,3,1), and a
+  // colour set on the child always wins over the link's inherited one.
+  color: var(--text-color);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -366,7 +369,8 @@ a.BingoPerson:hover {
     max-width: 100%;
   }
   a,
-  a:hover {
+  a:hover,
+  a span {
     color: var(--muted-color);
     font-weight: 600;
   }
@@ -735,12 +739,14 @@ a.BingoPerson:hover {
   white-space: nowrap;
 }
 .BingoTile-title {
+  color: var(--text-color);
   font-size: 16px;
   font-weight: bold;
   line-height: 1.25;
   overflow-wrap: anywhere;
 }
 .BingoTile-mine {
+  color: var(--text-color);
   font-size: 13px;
   font-weight: 600;
 
@@ -795,7 +801,8 @@ a.BingoPerson:hover {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-width: 680px;
+  // A gutter of its own on themes whose hero has no side padding on phones (Bespoke).
+  max-width: ~"min(680px, calc(100vw - 24px))";
   margin: 14px auto 0;
   text-align: left;
 }
