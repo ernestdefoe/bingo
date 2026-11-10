@@ -97,10 +97,19 @@ export default class GameModal extends FormModal<Attrs> {
     return (
       <div className="Modal-body">
         <div className="Form">
-          {this.attrs.discussion && <p className="helpText BingoGameModal-where">{t('form.in_discussion', { title: this.attrs.discussion.title() })}</p>}
+          {this.attrs.discussion && (
+            <p className="helpText BingoGameModal-where">{t('form.in_discussion', { title: this.attrs.discussion.title() })}</p>
+          )}
           <div className="Form-group">
             <label for="bingo-title">{t('form.name')}</label>
-            <input id="bingo-title" className="FormControl" maxlength={100} bidi={this.title_} required placeholder={extractText(t('form.name_placeholder'))} />
+            <input
+              id="bingo-title"
+              className="FormControl"
+              maxlength={100}
+              bidi={this.title_}
+              required
+              placeholder={extractText(t('form.name_placeholder'))}
+            />
           </div>
           <div className="Form-group">
             <label for="bingo-description">{t('form.description')}</label>
@@ -172,7 +181,12 @@ export default class GameModal extends FormModal<Attrs> {
           </div>
           <p className="helpText">{t(`rules.${this.verify()}`)}</p>
           <div className="Form-group">
-            <Button className="Button Button--primary Button--block" type="submit" loading={this.loading} disabled={count < need || !this.title_().trim()}>
+            <Button
+              className="Button Button--primary Button--block"
+              type="submit"
+              loading={this.loading}
+              disabled={count < need || !this.title_().trim()}
+            >
               {this.editing ? t('form.save') : t('form.create')}
             </Button>
           </div>

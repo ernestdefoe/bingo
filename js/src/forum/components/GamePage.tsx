@@ -58,16 +58,22 @@ export default class GamePage extends Page {
       app.setTitleCount(0);
     }
 
+    // The host (or a moderator who isn't playing) works the squares: they go in the main column.
+    const hosting = data.game.canManage && !data.me;
+
     return (
       <div className="BingoGame">
         {this.head(data.game)}
         {this.podium()}
         <div className="BingoGame-layout">
-          <div className="BingoGame-main">{data.me ? <Card state={state} /> : this.join(data.game)}</div>
+          <div className="BingoGame-main">
+            {data.me ? <Card state={state} /> : this.join(data.game)}
+            {hosting && <SquaresPanel state={state} />}
+          </div>
           <div className="BingoGame-side">
             <CallsPanel state={state} />
             <LeadersPanel state={state} />
-            <SquaresPanel state={state} />
+            {!hosting && <SquaresPanel state={state} />}
           </div>
         </div>
       </div>
@@ -84,9 +90,10 @@ export default class GamePage extends Page {
         </div>
         <h1 className="BingoGame-title">{game.title}</h1>
         <ul className="BingoGame-meta">
-          {game.host && <li>{t('game.hosted_by', { user: <Person id={game.host} /> })}</li>}
+          {game.host && <li>{t('game.hosted_by', { host: <Person id={game.host} /> })}</li>}
           <li>
-            <Icon name="far fa-calendar" /> {when(game.startsAt)} – {when(game.endsAt, new Date(game.startsAt).toDateString() !== new Date(game.endsAt).toDateString())}
+            <Icon name="far fa-calendar" /> {when(game.startsAt)} –{' '}
+            {when(game.endsAt, new Date(game.startsAt).toDateString() !== new Date(game.endsAt).toDateString())}
           </li>
           <li>
             <Icon name="fas fa-users" /> {t('game.players', { count: game.players })}
@@ -153,6 +160,17 @@ export default class GamePage extends Page {
 
   join(game: GameDetail): Mithril.Children {
     const state = this.state;
+    if (game.host === Number(app.session.user?.id())) {
+      return (
+        <div className="BingoJoin BingoJoin--host">
+          <div className="BingoJoin-body">
+            <h2>{t('join.hosting_title')}</h2>
+            <p>{t('join.hosting')}</p>
+          </div>
+        </div>
+      );
+    }
+
     let action: Mithril.Children;
     if (statusOf(game) === 'finished') action = <p>{t('join.over')}</p>;
     else if (!app.session.user)

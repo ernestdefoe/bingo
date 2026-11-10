@@ -73,7 +73,7 @@ export interface Hub {
   upcoming?: GameSummary[];
   past: GameSummary[];
   more: boolean;
-  board?: [userId: number, wins: number, podiums: number][];
+  board?: [userId: number, gold: number, silver: number, bronze: number][];
   canCreate?: boolean;
   users: UserRow[];
   now: string;

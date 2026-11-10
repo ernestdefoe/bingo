@@ -7,7 +7,7 @@ import LoadingIndicator from 'flarum/common/components/LoadingIndicator';
 import classList from 'flarum/common/utils/classList';
 import extractText from 'flarum/common/utils/extractText';
 import type Mithril from 'mithril';
-import { MEDALS, call, gameUrl, pushUsers, setSkew, statusOf, t, type GameSummary, type Hub } from '../api';
+import { MEDALS, call, gameUrl, placeName, pushUsers, setSkew, statusOf, t, type GameSummary, type Hub } from '../api';
 import { useClock } from '../state';
 import { Person } from './Panels';
 import { Clock, StatusPill } from './parts';
@@ -174,19 +174,26 @@ export default class HubPage extends Page {
     );
   }
 
-  board(board: [number, number, number][]): Mithril.Children {
+  board(board: [number, number, number, number][]): Mithril.Children {
     return (
       <aside className="BingoBoard">
         <h2 className="BingoHub-sectionTitle">
           <Icon name="fas fa-trophy" /> {t('hub.board')}
         </h2>
         <ol className="BingoBoard-list">
-          {board.map(([id, wins, podiums], i) => (
+          {board.map(([id, ...medals], i) => (
             <li>
               <span className="BingoBoard-rank">{i + 1}</span>
               <Person id={id} />
-              <span className="BingoBoard-score" title={extractText(t('hub.board_podiums', { count: podiums }))}>
-                {MEDALS[0]} {wins} <span className="BingoBoard-podiums">· {podiums}</span>
+              <span className="BingoBoard-score">
+                {medals.map((count, place) =>
+                  count ? (
+                    <span className="BingoBoard-medal" title={extractText(t('hub.board_medal', { place: placeName(place + 1), count }))}>
+                      {MEDALS[place]}
+                      {count > 1 && <small>×{count}</small>}
+                    </span>
+                  ) : null
+                )}
               </span>
             </li>
           ))}

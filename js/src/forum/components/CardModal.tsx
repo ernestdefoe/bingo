@@ -81,6 +81,7 @@ export default class CardModal extends Modal<IInternalModalAttrs & { id: number 
 
   join(): Mithril.Children {
     const state = this.state;
+    if (state.data!.game.host === Number(app.session.user?.id())) return <p className="BingoCardModal-note">{t('join.hosting')}</p>;
     if (statusOf(state.data!.game) === 'finished') return <p className="BingoCardModal-note">{t('join.over')}</p>;
     if (!app.session.user) {
       return (

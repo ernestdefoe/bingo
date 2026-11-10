@@ -42,6 +42,10 @@ class JoinController implements RequestHandlerInterface
         if ($game->status() === Game::FINISHED) {
             return Errors::make(422, 'bingo_over');
         }
+        // The host confirms squares and rules on calls: they referee, they don't play.
+        if ($game->user_id === $actor->id) {
+            return Errors::make(422, 'bingo_host_cannot_play');
+        }
 
         if (! Player::query()->where('game_id', $game->id)->where('user_id', $actor->id)->exists()) {
             $pool = Square::query()->where('game_id', $game->id)->orderBy('position')->pluck('id')->all();

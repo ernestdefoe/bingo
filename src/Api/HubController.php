@@ -61,14 +61,16 @@ class HubController implements RequestHandlerInterface
             ->whereNotNull('place')
             ->groupBy('user_id')
             ->select('user_id')
-            ->selectRaw('SUM(CASE WHEN place = 1 THEN 1 ELSE 0 END) AS wins')
-            ->selectRaw('COUNT(*) AS podiums')
-            ->orderByDesc('wins')
-            ->orderByDesc('podiums')
+            ->selectRaw('SUM(CASE WHEN place = 1 THEN 1 ELSE 0 END) AS gold')
+            ->selectRaw('SUM(CASE WHEN place = 2 THEN 1 ELSE 0 END) AS silver')
+            ->selectRaw('SUM(CASE WHEN place = 3 THEN 1 ELSE 0 END) AS bronze')
+            ->orderByDesc('gold')
+            ->orderByDesc('silver')
+            ->orderByDesc('bronze')
             ->limit(10)
             ->toBase()
             ->get()
-            ->map(fn ($row) => [(int) $row->user_id, (int) $row->wins, (int) $row->podiums])
+            ->map(fn ($row) => [(int) $row->user_id, (int) $row->gold, (int) $row->silver, (int) $row->bronze])
             ->all();
 
         $data = $this->lists(['live' => $live, 'upcoming' => $upcoming, 'past' => $past], $actor, array_column($board, 0));

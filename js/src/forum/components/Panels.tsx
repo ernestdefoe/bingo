@@ -3,7 +3,7 @@ import Component from 'flarum/common/Component';
 import Button from 'flarum/common/components/Button';
 import Icon from 'flarum/common/components/Icon';
 import Link from 'flarum/common/components/Link';
-import avatar from 'flarum/common/helpers/avatar';
+import Avatar from 'flarum/common/components/Avatar';
 import username from 'flarum/common/helpers/username';
 import humanTime from 'flarum/common/helpers/humanTime';
 import classList from 'flarum/common/utils/classList';
@@ -19,7 +19,7 @@ function Person() {
       const u = user(attrs.id);
       return u ? (
         <Link className="BingoPerson" href={app.route.user(u)}>
-          {avatar(u, { className: 'Avatar--small' })}
+          <Avatar user={u} className="Avatar--small" />
           <span className="BingoPerson-name">{username(u)}</span>
         </Link>
       ) : (
@@ -93,7 +93,12 @@ export class CallsPanel extends Component<{ state: GameState }> {
         {(manage || canDispute) && (
           <div className="BingoCall-actions">
             {manage && claim.status !== 'accepted' && (
-              <Button className="Button Button--primary Button--small" icon="fas fa-check" disabled={state.busy} onclick={() => state.rule(claim.id, 'accept')}>
+              <Button
+                className="Button Button--primary Button--small"
+                icon="fas fa-check"
+                disabled={state.busy}
+                onclick={() => state.rule(claim.id, 'accept')}
+              >
                 {t('calls.accept')}
               </Button>
             )}
@@ -108,7 +113,12 @@ export class CallsPanel extends Component<{ state: GameState }> {
               </Button>
             )}
             {manage && claim.disputes > 0 && !claim.reviewed && claim.status !== 'rejected' && (
-              <Button className="Button Button--small" icon="fas fa-scale-balanced" disabled={state.busy} onclick={() => state.rule(claim.id, 'uphold')}>
+              <Button
+                className="Button Button--small"
+                icon="fas fa-scale-balanced"
+                disabled={state.busy}
+                onclick={() => state.rule(claim.id, 'uphold')}
+              >
                 {t('calls.uphold')}
               </Button>
             )}
@@ -182,7 +192,10 @@ export class SquaresPanel extends Component<{ state: GameState }> {
     const manage = data.game.canManage && state.status !== 'upcoming';
     const players = Math.max(1, data.game.players);
     const q = this.filter().trim().toLowerCase();
-    const rows = data.squares.filter((row) => !q || row[1].toLowerCase().includes(q)).sort((a, b) => b[3] - a[3] || a[0] - b[0]);
+    // Most marked first: the crowd's hint at what happened. The host sees what's left to confirm on top.
+    const rows = data.squares
+      .filter((row) => !q || row[1].toLowerCase().includes(q))
+      .sort((a, b) => (manage ? a[2] - b[2] : 0) || b[3] - a[3] || a[0] - b[0]);
     const confirmed = data.squares.filter((row) => row[2]).length;
 
     return (

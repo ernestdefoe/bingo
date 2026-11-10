@@ -90,8 +90,12 @@ a.BingoPerson:hover {
   vertical-align: middle;
 
   .Avatar {
+    --size: 24px;
     flex-shrink: 0;
   }
+}
+.BingoPodium .BingoPerson .Avatar {
+  --size: 32px;
 }
 .BingoPerson-name {
   overflow: hidden;
@@ -138,6 +142,9 @@ a.BingoPerson:hover {
   }
 }
 .BingoCard-grid {
+  // The cells size their text from the grid's width (cqi) and their longest word (--w), so
+  // "Interception" fits a phone's cell whole instead of breaking in the middle.
+  container-type: inline-size;
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 6px;
@@ -154,7 +161,8 @@ a.BingoPerson:hover {
   background: var(--body-bg);
   color: var(--text-color);
   font: inherit;
-  font-size: 13px;
+  --fit: ~"max(8px, calc(27cqi / var(--w, 6)))";
+  font-size: ~"min(12.5px, var(--fit))";
   font-weight: 600;
   line-height: 1.15;
   text-align: center;
@@ -179,11 +187,14 @@ a.BingoPerson:hover {
     cursor: default;
   }
   &.is-mid {
-    font-size: 11.5px;
+    font-size: ~"min(11px, var(--fit))";
   }
   &.is-long {
-    font-size: 10px;
+    font-size: ~"min(9.5px, var(--fit))";
     font-weight: 500;
+  }
+  @media @phone {
+    padding: 4px 2px;
   }
   &.is-marked {
     background: var(--button-primary-bg, var(--primary-color));
@@ -205,8 +216,9 @@ a.BingoPerson:hover {
 .BingoCell-label {
   position: relative;
   z-index: 1;
-  overflow-wrap: anywhere;
-  hyphens: auto;
+  max-width: 100%;
+  // --fit sizes the text so the longest word fits whole; never break inside a word.
+  overflow-wrap: break-word;
   display: -webkit-box;
   -webkit-line-clamp: 5;
   -webkit-box-orient: vertical;
@@ -240,6 +252,15 @@ a.BingoPerson:hover {
   font-size: 9px;
   line-height: 16px;
   text-align: center;
+
+  @media @phone {
+    top: 2px;
+    right: 2px;
+    width: 13px;
+    height: 13px;
+    font-size: 7px;
+    line-height: 13px;
+  }
 }
 .BingoCell-star {
   color: @bingo-gold;
@@ -423,6 +444,9 @@ a.BingoPerson:hover {
     flex-direction: column;
     text-align: center;
   }
+}
+.BingoJoin--host {
+  margin-bottom: 16px;
 }
 .BingoJoin-preview {
   flex-shrink: 0;
@@ -756,9 +780,13 @@ a.BingoPerson:hover {
   font-weight: bold;
   white-space: nowrap;
 }
-.BingoBoard-podiums {
-  font-weight: normal;
-  color: var(--muted-color);
+.BingoBoard-medal {
+  margin-left: 4px;
+
+  small {
+    font-size: 11px;
+    color: var(--muted-color);
+  }
 }
 
 // ── discussion: strip under the title, posts in the stream ────────
@@ -855,9 +883,14 @@ a.BingoPerson:hover {
   font-weight: 600;
   color: var(--text-color);
 }
-.BingoPost-play {
+// Core greys every link in an event post; the Play button keeps its own colours.
+.EventPost a.BingoPost-play,
+.EventPost a.BingoPost-play:hover {
   margin-left: 6px;
   vertical-align: middle;
+  background: var(--button-primary-bg, var(--primary-color));
+  color: var(--button-primary-color, #fff);
+  text-decoration: none;
 }
 
 // ── modals ───────────────────────────────────────────────────────

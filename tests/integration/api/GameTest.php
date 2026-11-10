@@ -134,6 +134,9 @@ class GameTest extends TestCase
         $this->assertSame($state['me']['card'], $this->api('POST', "/games/{$game['id']}/join", 3)[1]['me']['card']);
         $this->assertSame(1, Game::query()->find($game['id'])->players_count);
 
+        // The host referees.
+        $this->assertSame('bingo_host_cannot_play', $this->api('POST', "/games/{$game['id']}/join", 2)[1]['errors'][0]['code']);
+
         // The centre is free, not a square to mark.
         $this->assertSame(422, $this->api('POST', "/games/{$game['id']}/mark", 3, ['cell' => Card::CENTER])[0]);
     }
@@ -292,6 +295,6 @@ class GameTest extends TestCase
         $this->assertSame('Later', $hub['upcoming'][0]['title']);
         $this->assertSame($game['id'], $hub['past'][0]['id']);
         $this->assertSame([[1, 3]], $hub['past'][0]['winners']);
-        $this->assertSame([[3, 1, 1]], $hub['board']);
+        $this->assertSame([[3, 1, 0, 0]], $hub['board']);
     }
 }

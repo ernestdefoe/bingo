@@ -29,7 +29,7 @@ ernestdefoe-bingo:
       past: Finished
       more: Show more
       board: Winners
-      board_podiums: "{count, plural, one {# podium finish} other {# podium finishes}}"
+      board_medal: "{place} ×{count}"
       mine: "{count, plural, one {You're one away!} other {You're # away}}"
       mine_bingo: You have Bingo!
 
@@ -44,7 +44,7 @@ ernestdefoe-bingo:
       ended: Ended {time}
 
     game:
-      hosted_by: Hosted by {user}
+      hosted_by: Hosted by {host}
       players: "{count, plural, one {# player} other {# players}}"
       winners: Winners
 
@@ -69,6 +69,8 @@ ernestdefoe-bingo:
       log_in: Log in to play
       watch_only: You can watch this game, but you can't play.
       over: This game is over.
+      hosting_title: You're the host
+      hosting: "You confirm squares as they happen and rule on Bingo calls, so you don't get a card in your own game."
 
     card:
       label: Your Bingo card
@@ -357,6 +359,7 @@ ernestdefoe-bingo:
       bingo_over: This game is over.
       bingo_not_started: This game hasn't started yet.
       bingo_not_player: Get your card first.
+      bingo_host_cannot_play: You're hosting this game, so you referee instead of playing.
       bingo_bad_cell: That isn't a square on your card.
       bingo_slow_down: You're going a bit fast. Try again in a minute.
       bingo_already_won: You already have a Bingo in this game.

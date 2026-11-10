@@ -47,6 +47,7 @@ export default class Card extends Component<{ state: GameState }> {
             }
             const square = squares.get(id);
             const label = square?.[1] ?? '';
+            const word = Math.max(...label.split(/\s+/).map((w) => w.length));
             return (
               <button
                 key={cell}
@@ -58,6 +59,7 @@ export default class Card extends Component<{ state: GameState }> {
                   lit.has(cell) && 'is-line',
                   label.length > 40 ? 'is-long' : label.length > 18 && 'is-mid'
                 )}
+                style={{ '--w': Math.max(word, 6) }}
                 aria-pressed={marked ? 'true' : 'false'}
                 title={label}
                 disabled={!live}
@@ -105,7 +107,10 @@ export default class Card extends Component<{ state: GameState }> {
             loading={state.busy}
             onclick={(e: MouseEvent) => {
               const from = e.currentTarget as HTMLElement;
-              state.call().then(() => confetti(from));
+              state.call().then((data) => {
+                const me = Number(app.session.user?.id());
+                if (data.claims.some((claim) => claim.user === me && claim.status === 'accepted')) confetti(from);
+              });
             }}
           >
             {t('card.bingo')}
