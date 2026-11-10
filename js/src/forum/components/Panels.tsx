@@ -56,7 +56,7 @@ export class CallsPanel extends Component<{ state: GameState }> {
     const data = state.data!;
     const labels = new Map(data.squares.map((row) => [row[0], row]));
     const self = claim.user === Number(app.session.user?.id());
-    const manage = data.game.canManage;
+    const manage = data.game.canReferee;
     const canDispute = !self && !!data.me && !claim.disputed && !claim.reviewed && claim.status !== 'rejected';
     const open = this.open.has(claim.id);
 
@@ -189,7 +189,7 @@ export class SquaresPanel extends Component<{ state: GameState }> {
   view() {
     const state = this.attrs.state;
     const data = state.data!;
-    const manage = data.game.canManage && state.status !== 'upcoming';
+    const manage = data.game.canReferee && state.status !== 'upcoming';
     const players = Math.max(1, data.game.players);
     const q = this.filter().trim().toLowerCase();
     // Most marked first: the crowd's hint at what happened. The host sees what's left to confirm on top.

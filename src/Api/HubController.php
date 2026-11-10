@@ -42,7 +42,10 @@ class HubController implements RequestHandlerInterface
         $offset = max(0, (int) Arr::get($request->getQueryParams(), 'past', 0));
         $visible = fn () => Game::query()->whereVisibleTo($actor)->with('discussion');
 
-        $past = $visible()->where('bingo_games.ends_at', '<=', $now)->orderByDesc('bingo_games.ends_at')->orderByDesc('bingo_games.id')
+        $past = $visible()
+            ->where(fn ($q) => $q->where('bingo_games.ends_at', '<=', $now)->orWhereNotNull('bingo_games.finished_at'))
+            ->orderByRaw('COALESCE('.$this->column('finished_at').', '.$this->column('ends_at').') DESC')
+            ->orderByDesc('bingo_games.id')
             ->offset($offset)->limit(self::PAGE + 1)->get();
         $more = $past->count() > self::PAGE;
         $past = $past->take(self::PAGE);
@@ -51,9 +54,9 @@ class HubController implements RequestHandlerInterface
             return new JsonResponse($this->lists(['past' => $past], $actor) + ['more' => $more]);
         }
 
-        $live = $visible()->where('bingo_games.starts_at', '<=', $now)->where('bingo_games.ends_at', '>', $now)
+        $live = $visible()->where('bingo_games.starts_at', '<=', $now)->where('bingo_games.ends_at', '>', $now)->whereNull('bingo_games.finished_at')
             ->orderByDesc('bingo_games.players_count')->limit(24)->get();
-        $upcoming = $visible()->where('bingo_games.starts_at', '>', $now)->orderBy('bingo_games.starts_at')->limit(24)->get();
+        $upcoming = $visible()->where('bingo_games.starts_at', '>', $now)->whereNull('bingo_games.finished_at')->orderBy('bingo_games.starts_at')->limit(24)->get();
 
         $board = Claim::query()
             ->whereIn('game_id', Game::query()->whereVisibleTo($actor)->select('bingo_games.id'))
@@ -80,6 +83,12 @@ class HubController implements RequestHandlerInterface
             'board' => $board,
             'canCreate' => $actor->can(Settings::CREATE),
         ]);
+    }
+
+    /** A prefixed, quoted column for the one raw ORDER BY (table prefixes pass through raw SQL verbatim). */
+    private function column(string $name): string
+    {
+        return (new Game())->getConnection()->getQueryGrammar()->wrap('bingo_games.'.$name);
     }
 
     /**

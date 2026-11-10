@@ -6,20 +6,22 @@ use Carbon\Carbon;
 use Flarum\Discussion\Discussion;
 use Flarum\Http\SlugManager;
 use Flarum\User\User;
+use Illuminate\Contracts\Cache\Repository as Cache;
 use Illuminate\Support\Collection;
 
 /**
  * What the browser gets. One game's whole state is a fixed handful of
  * queries however many play (the "closest" board reads one integer per
- * player); people come as one compact list, pushed into the forum's store
+ * player, cached 10 s per game); people come as one compact list, pushed into the forum's store
  * so avatars and names render the usual way.
  */
 class Presenter
 {
     public const CALLS = 60;
     public const LEADERS = 8;
+    public const BOARD_TTL = 10;
 
-    public function __construct(private readonly SlugManager $slugs)
+    public function __construct(private readonly SlugManager $slugs, private readonly Cache $cache)
     {
     }
 
@@ -32,22 +34,7 @@ class Presenter
         $claims = Claim::query()->where('game_id', $game->id)->orderByDesc('id')->limit(self::CALLS)->get();
         $disputed = $actor->isGuest() || $claims->isEmpty() ? []
             : Dispute::query()->whereIn('claim_id', $claims->pluck('id'))->where('user_id', $actor->id)->pluck('claim_id')->all();
-        $winners = Claim::query()->where('game_id', $game->id)->where('status', Claim::ACCEPTED)->pluck('user_id')->all();
-
-        // "Closest to Bingo": cells needed by each player's best line, from the marks alone.
-        $away = [];
-        $near = [0, 0, 0];
-        foreach (Player::query()->where('game_id', $game->id)->orderBy('id')->pluck('marks', 'user_id') as $userId => $marks) {
-            $n = Card::away((int) $marks);
-            if ($n >= 1 && $n <= 3) {
-                $near[$n - 1]++;
-            }
-            if ($n > 0 && ! in_array($userId, $winners, true)) {
-                $away[(int) $userId] = $n;
-            }
-        }
-        asort($away);
-        $leaders = array_slice($away, 0, self::LEADERS, true);
+        [$leaders, $near] = $this->board($game);
 
         $manage = $game->canManage($actor);
         $userIds = array_merge([$game->user_id], $claims->pluck('user_id')->all(), array_keys($leaders));
@@ -57,6 +44,7 @@ class Presenter
                 'description' => $game->description,
                 'freeLabel' => $game->free_label,
                 'canManage' => $manage,
+                'canReferee' => $manage && ! $player,
                 'locked' => $game->players_count > 0,
             ],
             'squares' => $squares->map(fn (Square $square) => [
@@ -88,6 +76,35 @@ class Presenter
     }
 
     /**
+     * "Closest to Bingo": cells each player's best line still needs, from
+     * the marks alone. The same for every viewer, so it is cached for a few
+     * seconds per game: a crowd polling a busy game reads one integer per
+     * player once, not once each.
+     *
+     * @return array{0: array<int, int>, 1: array{int, int, int}}
+     */
+    private function board(Game $game): array
+    {
+        return $this->cache->remember('ernestdefoe-bingo.board.'.$game->id, self::BOARD_TTL, function () use ($game) {
+            $winners = Claim::query()->where('game_id', $game->id)->where('status', Claim::ACCEPTED)->pluck('user_id')->all();
+            $away = [];
+            $near = [0, 0, 0];
+            foreach (Player::query()->where('game_id', $game->id)->orderBy('id')->pluck('marks', 'user_id') as $userId => $marks) {
+                $n = Card::away((int) $marks);
+                if ($n >= 1 && $n <= 3) {
+                    $near[$n - 1]++;
+                }
+                if ($n > 0 && ! in_array($userId, $winners, true)) {
+                    $away[(int) $userId] = $n;
+                }
+            }
+            asort($away);
+
+            return [array_slice($away, 0, self::LEADERS, true), $near];
+        });
+    }
+
+    /**
      * A game as a list or a discussion shows it.
      *
      * @return array<string, mixed>
@@ -102,8 +119,10 @@ class Presenter
             'title' => $game->title,
             'status' => $game->status(),
             'startsAt' => $game->starts_at->toIso8601String(),
-            'endsAt' => $game->ends_at->toIso8601String(),
-            'endedEarly' => $game->ended_early,
+            // When it ends (or ended): what every clock and status reads. The schedule is for the editor.
+            'endsAt' => $game->endedAt()->toIso8601String(),
+            'scheduledEndsAt' => $game->ends_at->toIso8601String(),
+            'endedEarly' => $game->finished_at !== null,
             'freeCenter' => $game->free_center,
             'places' => $game->places,
             'verify' => $game->verify,

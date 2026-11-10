@@ -59,7 +59,7 @@ export default class GamePage extends Page {
     }
 
     // The host (or a moderator who isn't playing) works the squares: they go in the main column.
-    const hosting = data.game.canManage && !data.me;
+    const hosting = data.game.canReferee;
 
     return (
       <div className="BingoGame">

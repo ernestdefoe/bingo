@@ -18,6 +18,10 @@ use Illuminate\Support\Collection;
  * one is checked on the server against the stored card and marks; the
  * browser only ever says "I have Bingo", never which line or that it won.
  *
+ * Each of them runs in a transaction that first takes the game's row lock
+ * (Game::lock) and re-reads the game, so two calls, or a call and a
+ * ruling, never decide places from the same stale picture.
+ *
  * Places: an accepted call ranks at the moment its line became true, the
  * later of the call and the last confirmation of its squares. Calls that
  * rank at the same moment share a place, like a tie in a bingo hall.
@@ -25,6 +29,9 @@ use Illuminate\Support\Collection;
 class Referee
 {
     public const MAX_CALLS = 5;
+
+    /** On the honor system, a call this soon after the start can't be real: nothing has happened yet. */
+    public const TRUST_GRACE = 120;
 
     public function __construct(
         private readonly ConnectionInterface $db,
@@ -37,6 +44,14 @@ class Referee
     public function call(Game $game, Player $player, User $actor): Claim|string
     {
         $result = $this->db->transaction(function () use ($game, $player, $actor) {
+            $game->lock();
+            if (! $game->isLive()) {
+                return $game->status() === Game::UPCOMING ? 'bingo_not_started' : 'bingo_over';
+            }
+            if ($game->verify === Settings::VERIFY_TRUST && Carbon::now() < $game->starts_at->copy()->addSeconds(self::TRUST_GRACE)) {
+                return 'bingo_too_soon';
+            }
+
             $player = Player::query()->whereKey($player->id)->lockForUpdate()->firstOrFail();
             $mine = Claim::query()->where('game_id', $game->id)->where('user_id', $actor->id)->get(['id', 'status', 'line']);
 
@@ -79,11 +94,9 @@ class Referee
             }
             $claim->save();
 
-            if ($claim->status === Claim::ACCEPTED) {
-                $this->standings($game);
-            }
+            $moved = $claim->status === Claim::ACCEPTED ? $this->standings($game) : [];
 
-            return ['claim' => $claim, 'labels' => array_map(fn ($id) => $squares[$id]->label ?? '', $claim->squareIds())];
+            return ['claim' => $claim, 'moved' => $moved, 'labels' => array_map(fn ($id) => $squares[$id]->label ?? '', $claim->squareIds())];
         });
 
         if (is_string($result)) {
@@ -97,8 +110,9 @@ class Referee
         if ($game->user_id && $game->user_id !== $actor->id && $game->host) {
             $this->notifications->sync(new ReviewBlueprint($game, $claim, $actor, 'call'), [$game->host]);
         }
+        $this->tellMoved($game, $result['moved'], [$claim->id], null);
 
-        $this->finalize($game);
+        $this->results($game);
         $this->pulse->bump($game);
 
         return $claim;
@@ -107,25 +121,26 @@ class Referee
     /** The host or a moderator says a square happened (or takes it back). */
     public function confirm(Game $game, Square $square, bool $confirmed, User $actor): void
     {
-        if ($confirmed === ($square->confirmed_at !== null)) {
-            return;
-        }
+        $result = $this->db->transaction(function () use ($game, $square, $confirmed, $actor) {
+            $game->lock();
+            $square = Square::query()->whereKey($square->id)->lockForUpdate()->firstOrFail();
+            if ($confirmed === ($square->confirmed_at !== null)) {
+                return null;
+            }
 
-        $changed = $this->db->transaction(function () use ($game, $square, $confirmed, $actor) {
             $square->confirmed_at = $confirmed ? Carbon::now() : null;
             $square->confirmed_by = $confirmed ? $actor->id : null;
             $square->save();
 
             if ($game->verify !== Settings::VERIFY_CONFIRMED) {
-                return [];
+                return ['ruled' => [], 'moved' => []];
             }
 
             $squares = Square::query()->where('game_id', $game->id)->get()->keyBy('id');
-            $changed = [];
+            $ruled = [];
             $status = $confirmed ? Claim::PENDING : Claim::ACCEPTED;
-            $claims = Claim::query()->where('game_id', $game->id)->where('status', $status)->get();
 
-            foreach ($claims as $claim) {
+            foreach (Claim::query()->where('game_id', $game->id)->where('status', $status)->get() as $claim) {
                 if (! in_array($square->id, $claim->squareIds(), true)) {
                     continue;
                 }
@@ -135,7 +150,7 @@ class Referee
                     $claim->auto = true;
                     $claim->ranked_at = $this->rankTime($claim, $squares);
                     $claim->save();
-                    $changed[] = $claim;
+                    $ruled[] = $claim;
                 } elseif (! $confirmed && $claim->auto) {
                     // Taken back: a call that only stood on this square waits again.
                     $claim->status = Claim::PENDING;
@@ -143,36 +158,39 @@ class Referee
                     $claim->ranked_at = null;
                     $claim->place = null;
                     $claim->save();
-                    $changed[] = $claim;
+                    $ruled[] = $claim;
                 }
             }
 
-            if ($changed) {
-                $this->standings($game);
-            }
-
-            return $changed;
+            return ['ruled' => $ruled, 'moved' => $ruled ? $this->standings($game) : []];
         });
 
-        foreach ($changed as $claim) {
+        if ($result === null) {
+            return;
+        }
+
+        foreach ($result['ruled'] as $claim) {
             $claim->refresh();
             $this->updatePost($claim);
             if ($claim->status === Claim::ACCEPTED) {
                 $this->tell($game, $claim, null);
             }
         }
+        $this->tellMoved($game, $result['moved'], array_map(fn (Claim $claim) => $claim->id, $result['ruled']), null);
 
-        $this->finalize($game);
+        $this->results($game);
         $this->pulse->bump($game);
     }
 
     /** accept, reject, or uphold (clear the disputes and keep the call as it is). */
     public function rule(Game $game, Claim $claim, string $action, ?string $note, User $actor): void
     {
-        $before = $claim->status;
-
-        $this->db->transaction(function () use ($game, $claim, $action, $note, $actor) {
+        $result = $this->db->transaction(function () use ($game, $claim, $action, $note, $actor) {
+            $game->lock();
+            $claim = Claim::query()->whereKey($claim->id)->lockForUpdate()->firstOrFail();
+            $before = $claim->status;
             $now = Carbon::now();
+
             if ($action === 'accept' && $claim->status !== Claim::ACCEPTED) {
                 $squares = Square::query()->where('game_id', $game->id)->get()->keyBy('id');
                 $claim->status = Claim::ACCEPTED;
@@ -194,29 +212,35 @@ class Referee
             $claim->save();
             Dispute::query()->where('claim_id', $claim->id)->delete();
 
-            $this->standings($game);
+            return ['claim' => $claim, 'before' => $before, 'moved' => $this->standings($game)];
         });
 
+        $claim = $result['claim'];
         $claim->refresh();
         $this->updatePost($claim);
-        if ($claim->status !== $before) {
+        if ($claim->status !== $result['before']) {
             $this->tell($game, $claim, $actor);
         }
+        $this->tellMoved($game, $result['moved'], [$claim->id], $actor);
 
-        $this->finalize($game);
+        $this->results($game);
         $this->pulse->bump($game);
     }
 
     public function dispute(Game $game, Claim $claim, User $actor, ?string $reason): void
     {
-        $dispute = new Dispute();
-        $dispute->claim_id = $claim->id;
-        $dispute->user_id = $actor->id;
-        $dispute->reason = $reason;
-        $dispute->created_at = Carbon::now();
-        $dispute->save();
+        $this->db->transaction(function () use ($game, $claim, $actor, $reason) {
+            $game->lock();
 
-        Claim::query()->whereKey($claim->id)->increment('disputes_count');
+            $dispute = new Dispute();
+            $dispute->claim_id = $claim->id;
+            $dispute->user_id = $actor->id;
+            $dispute->reason = $reason;
+            $dispute->created_at = Carbon::now();
+            $dispute->save();
+
+            Claim::query()->whereKey($claim->id)->increment('disputes_count');
+        });
 
         if ($game->user_id && $game->user_id !== $actor->id && $game->host) {
             $this->notifications->sync(new ReviewBlueprint($game, $claim, $actor, 'dispute'), [$game->host]);
@@ -226,10 +250,17 @@ class Referee
     }
 
     /**
-     * Places from ranked_at; ties share a place. When every place has a
-     * winner the game is over: ends_at becomes now.
+     * Places from ranked_at; ties share a place. Call inside a transaction
+     * that holds the game's lock.
+     *
+     * When every place has a winner the game is finished (finished_at);
+     * when a ruling frees a place again before the scheduled end, it opens
+     * again, unless the host ended it. Returns the accepted calls whose
+     * place moved, so their players can be told.
+     *
+     * @return list<Claim>
      */
-    public function standings(Game $game): void
+    public function standings(Game $game): array
     {
         $claims = Claim::query()
             ->where('game_id', $game->id)
@@ -238,6 +269,7 @@ class Referee
             ->orderBy('id')
             ->get();
 
+        $moved = [];
         $rank = 0;
         $last = null;
         foreach ($claims as $claim) {
@@ -250,55 +282,91 @@ class Referee
             if ($claim->place !== $place) {
                 $claim->place = $place;
                 $claim->save();
+                $moved[] = $claim;
                 if ($claim->post_id) {
                     $this->updatePost($claim);
                 }
             }
         }
 
-        if ($rank >= $game->places && $game->isLive()) {
-            $game->ends_at = Carbon::now();
-            $game->ended_early = true;
+        $filled = $rank >= $game->places;
+        $now = Carbon::now();
+        if ($filled && ! $game->finished_at && $game->isLive()) {
+            $game->finished_at = $now;
+            $game->finished_by_host = false;
+            $game->save();
+        } elseif (! $filled && $game->finished_at && ! $game->finished_by_host && $now < $game->ends_at) {
+            $game->finished_at = null;
             $game->save();
         }
+
+        return $moved;
     }
 
     /**
-     * Once a game is over, its results go into the discussion, once. Called
-     * after anything that can end a game and when an ended game is viewed
-     * (a game that simply ran out of time has nobody to post it).
+     * The results post in the game's discussion: written once the game is
+     * over, then kept true in place (by id) whenever standings change, a
+     * call is still being checked, or a freed place reopens the game.
+     *
+     * $onlyIfMissing is the cheap path for page views: a game that simply
+     * ran out of time has nobody else to post its results.
      */
-    public function finalize(Game $game): void
+    public function results(Game $game, bool $onlyIfMissing = false): void
     {
-        if ($game->results_posted_at || $game->status() !== Game::FINISHED) {
+        if (! $game->discussion_id || ($onlyIfMissing && ($game->results_post_id || $game->status() !== Game::FINISHED))) {
+            return;
+        }
+        if (! $game->results_post_id && $game->status() !== Game::FINISHED) {
             return;
         }
 
-        $now = Carbon::now();
-        $won = Game::query()->whereKey($game->id)->whereNull('results_posted_at')->update(['results_posted_at' => $now]);
-        $game->results_posted_at = $now;
-        if (! $won || ! $game->discussion_id || ! $game->players_count) {
-            return;
-        }
+        $this->db->transaction(function () use ($game) {
+            $game->lock();
+            $finished = $game->status() === Game::FINISHED;
+            $post = $game->results_post_id ? Post::query()->where('type', BingoPost::$type)->find($game->results_post_id) : null;
+            if (! $post && (! $finished || ! $game->players_count)) {
+                return;
+            }
 
+            $content = $this->resultsContent($game, $finished);
+            if ($post instanceof BingoPost) {
+                if ($post->content != $content) {
+                    $post->content = $content;
+                    $post->save();
+                }
+
+                return;
+            }
+
+            $post = BingoPost::reply($game->discussion_id, $game->user_id, $content);
+            $post->save();
+            $game->results_post_id = $post->id;
+            $game->save();
+        });
+    }
+
+    /** @return array<string, mixed> */
+    private function resultsContent(Game $game, bool $finished): array
+    {
         $claims = Claim::query()
             ->where('game_id', $game->id)
-            ->where('status', Claim::ACCEPTED)
-            ->whereNotNull('place')
+            ->whereIn('status', [Claim::ACCEPTED, Claim::PENDING])
             ->orderBy('place')
             ->orderBy('id')
-            ->get(['user_id', 'place']);
+            ->get(['user_id', 'place', 'status']);
+        $placed = $claims->where('status', Claim::ACCEPTED)->whereNotNull('place');
         // Names as they are now: the post must read right without loading anyone.
-        $users = User::query()->whereIn('id', $claims->pluck('user_id'))->get()->keyBy('id');
-        $winners = $claims->map(fn (Claim $claim) => [$claim->place, $claim->user_id, $users[$claim->user_id]->display_name ?? ''])->all();
+        $users = User::query()->whereIn('id', $placed->pluck('user_id'))->get()->keyBy('id');
 
-        BingoPost::reply($game->discussion_id, $game->user_id, [
+        return [
             'kind' => 'results',
             'game' => $game->id,
             'title' => $game->title,
-            'winners' => $winners,
+            'winners' => $placed->map(fn (Claim $claim) => [$claim->place, $claim->user_id, $users[$claim->user_id]->display_name ?? ''])->values()->all(),
+            'pending' => $claims->where('status', Claim::PENDING)->count(),
+            'open' => ! $finished,
             'players' => $game->players_count,
-        ])->save();
+        ];
     }
 
     public function postGame(Game $game, int $squares): void
@@ -357,6 +425,22 @@ class Referee
         $player = User::query()->find($claim->user_id);
         if ($player instanceof User && $player->id !== $by?->id) {
             $this->notifications->sync(new ResultBlueprint($game, $claim, $player, $by), [$player]);
+        }
+    }
+
+    /**
+     * Players whose place moved because of someone else's call or ruling
+     * (2nd became 1st after a rejection): told once, only them.
+     *
+     * @param list<Claim> $moved
+     * @param list<int> $told claims already told about by the caller
+     */
+    private function tellMoved(Game $game, array $moved, array $told, ?User $by): void
+    {
+        foreach ($moved as $claim) {
+            if (! in_array($claim->id, $told, true) && $claim->place) {
+                $this->tell($game, $claim, $by);
+            }
         }
     }
 

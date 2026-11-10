@@ -23,7 +23,7 @@ class DiscussionGames
         $order = [Game::LIVE => 0, Game::UPCOMING => 1, Game::FINISHED => 2];
 
         return $games
-            ->each(fn (Game $game) => $this->referee->finalize($game))
+            ->each(fn (Game $game) => $this->referee->results($game, true))
             ->sortBy(fn (Game $game) => $order[$game->status()])
             ->map(fn (Game $game) => $this->presenter->game($game, $actor, $discussion))
             ->values()

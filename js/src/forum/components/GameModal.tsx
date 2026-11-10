@@ -55,7 +55,7 @@ export default class GameModal extends FormModal<Attrs> {
       this.freeCenter(game.freeCenter);
       this.freeLabel(game.freeLabel || '');
       this.startsAt(local(new Date(game.startsAt)));
-      this.endsAt(local(new Date(game.endsAt)));
+      this.endsAt(local(new Date(game.scheduledEndsAt || game.endsAt)));
       this.places(String(game.places));
       this.verify(game.verify);
     } else {

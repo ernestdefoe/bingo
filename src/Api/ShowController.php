@@ -27,7 +27,7 @@ class ShowController implements RequestHandlerInterface
             return Errors::make(404, 'bingo_not_found');
         }
 
-        $this->referee->finalize($game);
+        $this->referee->results($game, true);
 
         return new JsonResponse($this->presenter->state($game, $actor));
     }

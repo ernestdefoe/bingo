@@ -43,6 +43,8 @@ export default class BingoPost extends EventPost {
     }
 
     if (c.kind === 'results') {
+      // Kept true in place: a freed place reopens the game, and calls still being checked are said so.
+      if (c.open) return <span>{t('post.reopened', { game })}</span>;
       const winners: [number, number, string][] = Array.isArray(c.winners) ? c.winners : [];
       return (
         <span>
@@ -58,6 +60,7 @@ export default class BingoPost extends EventPost {
           ) : (
             t('post.no_winner')
           )}
+          {c.pending > 0 && <span className="BingoPost-labels">{t('post.pending', { count: c.pending })}</span>}
         </span>
       );
     }

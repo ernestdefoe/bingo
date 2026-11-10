@@ -114,6 +114,8 @@ class SaveController implements RequestHandlerInterface
             $this->insertSquares($game, $labels, 0);
         });
 
+        // A poll may have remembered this id as missing a moment ago.
+        $this->pulse->forget($game->id);
         $this->referee->postGame($game, count($labels));
 
         return new JsonResponse($this->presenter->state($game, $actor), 201);
@@ -128,8 +130,8 @@ class SaveController implements RequestHandlerInterface
         if ($action === 'start' && $game->status() === Game::UPCOMING) {
             $game->starts_at = $now;
         } elseif ($action === 'end' && $game->status() !== Game::FINISHED) {
-            $game->ends_at = $now->max($game->starts_at);
-            $game->ended_early = true;
+            $game->finished_at = $now;
+            $game->finished_by_host = true;
         } elseif ($action === null) {
             if (array_key_exists('title', $body)) {
                 $title = self::text($body['title'], 100);
@@ -147,6 +149,10 @@ class SaveController implements RequestHandlerInterface
             if (array_key_exists('verify', $body) && in_array($body['verify'], Settings::VERIFY_MODES, true)) {
                 $game->verify = $body['verify'];
             }
+            // The free centre changes how many squares a card takes: only before anyone has one.
+            if (array_key_exists('freeCenter', $body) && $game->players_count === 0) {
+                $game->free_center = filter_var($body['freeCenter'], FILTER_VALIDATE_BOOLEAN);
+            }
             if (array_key_exists('places', $body)) {
                 $game->places = self::places($body['places']);
             }
@@ -160,14 +166,15 @@ class SaveController implements RequestHandlerInterface
             $game->starts_at = $starts;
             if (! $ends->equalTo($game->ends_at)) {
                 $game->ends_at = $ends;
-                // Given more time: the game is open again and its results will be posted when it ends.
-                if ($ends > $now) {
-                    $game->ended_early = false;
-                    $game->results_posted_at = null;
+                // Given more time after the host ended it: open again (standings finish it again if every place is won).
+                if ($ends > $now && $game->finished_by_host) {
+                    $game->finished_at = null;
+                    $game->finished_by_host = false;
                 }
             }
 
-            $error = array_key_exists('squares', $body) ? $this->saveSquares($game, $body['squares']) : null;
+            $error = array_key_exists('squares', $body) ? $this->saveSquares($game, $body['squares'])
+                : ($game->isDirty('free_center') ? self::checkLabels(Square::query()->where('game_id', $game->id)->pluck('label')->all(), $game->free_center) : null);
             if ($error) {
                 return Errors::make(422, $error);
             }
@@ -176,12 +183,11 @@ class SaveController implements RequestHandlerInterface
         }
 
         $this->db->transaction(function () use ($game) {
-            $game->save();
-            if (Claim::query()->where('game_id', $game->id)->where('status', Claim::ACCEPTED)->exists()) {
-                $this->referee->standings($game);
-            }
+            $changes = $game->getDirty();
+            $game->lock()->forceFill($changes)->save();
+            $this->referee->standings($game);
         });
-        $this->referee->finalize($game);
+        $this->referee->results($game);
         $this->pulse->bump($game);
 
         return new JsonResponse($this->presenter->state($game, $actor));

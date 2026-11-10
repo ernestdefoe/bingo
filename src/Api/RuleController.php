@@ -38,6 +38,9 @@ class RuleController implements RequestHandlerInterface
         if (! $game->canManage($actor)) {
             return Errors::make(403, 'bingo_not_host');
         }
+        if (! $game->canReferee($actor)) {
+            return Errors::make(403, 'bingo_player_cannot_referee');
+        }
 
         $body = (array) $request->getParsedBody();
         $action = $body['action'] ?? null;

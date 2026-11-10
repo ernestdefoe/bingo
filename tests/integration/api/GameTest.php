@@ -6,6 +6,8 @@ use Carbon\Carbon;
 use ErnestDefoe\Bingo\Card;
 use ErnestDefoe\Bingo\Claim;
 use ErnestDefoe\Bingo\Game;
+use ErnestDefoe\Bingo\Player;
+use ErnestDefoe\Bingo\Referee;
 use ErnestDefoe\Bingo\Square;
 use Flarum\Discussion\Discussion;
 use Flarum\Post\Post;
@@ -77,6 +79,12 @@ class GameTest extends TestCase
         }
 
         return $state['me']['card'];
+    }
+
+    /** The honor system refuses calls in the first two minutes. */
+    private function afterGrace(): void
+    {
+        Carbon::setTestNow(Carbon::now()->addSeconds(Referee::TRUST_GRACE + 1));
     }
 
     private function confirm(array $squareIds, int $as = 2): void
@@ -158,6 +166,7 @@ class GameTest extends TestCase
     {
         $game = $this->create(['verify' => 'trust'])['game'];
         $this->fillRow($game['id'], 3, 0);
+        $this->afterGrace();
 
         [$status, $state] = $this->api('POST', "/games/{$game['id']}/call", 3);
         $this->assertSame(201, $status);
@@ -264,6 +273,7 @@ class GameTest extends TestCase
 
         $this->fillRow($game['id'], 3, 0);
         $this->assertSame($before, $this->api('GET', "/games/{$game['id']}/pulse", null)[1]['rev'], 'marks are private');
+        $this->afterGrace();
 
         $this->api('POST', "/games/{$game['id']}/call", 3);
         $this->assertGreaterThan($before, $this->api('GET', "/games/{$game['id']}/pulse", null)[1]['rev']);
@@ -288,6 +298,7 @@ class GameTest extends TestCase
         $game = $this->create(['verify' => 'trust', 'discussionId' => null])['game'];
         $this->create(['title' => 'Later', 'startsAt' => Carbon::now()->addDay()->toIso8601String(), 'endsAt' => Carbon::now()->addDay()->addHours(2)->toIso8601String()]);
         $this->fillRow($game['id'], 3, 2);
+        $this->afterGrace();
         $this->api('POST', "/games/{$game['id']}/call", 3);
 
         [$status, $hub] = $this->api('GET', '', null);
@@ -296,5 +307,125 @@ class GameTest extends TestCase
         $this->assertSame($game['id'], $hub['past'][0]['id']);
         $this->assertSame([[1, 3]], $hub['past'][0]['winners']);
         $this->assertSame([[3, 1, 0, 0]], $hub['board']);
+    }
+
+    #[Test]
+    public function an_honor_system_win_in_the_first_seconds_is_refused_and_a_rejected_win_reopens_the_game()
+    {
+        $game = $this->create(['verify' => 'trust'])['game'];
+        $this->fillRow($game['id'], 3, 0);
+
+        [$status, $body] = $this->api('POST', "/games/{$game['id']}/call", 3);
+        $this->assertSame(422, $status);
+        $this->assertSame('bingo_too_soon', $body['errors'][0]['code']);
+
+        $this->afterGrace();
+        [, $state] = $this->api('POST', "/games/{$game['id']}/call", 3);
+        $this->assertSame('finished', $state['game']['status']);
+        $results = Post::query()->find(Game::query()->find($game['id'])->results_post_id);
+        $this->assertSame([[1, 3, 'dana']], $results->content['winners']);
+
+        // The host throws the cheat out: the game is open again until its scheduled end, and the results post says so.
+        [, $state] = $this->api('POST', "/claims/{$state['claims'][0]['id']}", 2, ['action' => 'reject', 'note' => 'Nothing had happened yet']);
+        $this->assertSame('live', $state['game']['status']);
+        $this->assertTrue($results->fresh()->content['open']);
+        $this->api('POST', "/games/{$game['id']}/join", 4);
+        $this->assertSame(200, $this->api('POST', "/games/{$game['id']}/mark", 4, ['cell' => 0, 'on' => true])[0], 'others play on');
+    }
+
+    #[Test]
+    public function the_results_post_is_kept_true_in_place_and_says_when_calls_are_still_being_checked()
+    {
+        $game = $this->create(['verify' => 'host', 'places' => 1])['game'];
+        $this->fillRow($game['id'], 3, 0);
+        $this->fillRow($game['id'], 4, 1);
+        [, $state] = $this->api('POST', "/games/{$game['id']}/call", 3);
+        $first = $state['claims'][0]['id'];
+        [, $state] = $this->api('POST', "/games/{$game['id']}/call", 4);
+        $second = $state['claims'][0]['id'];
+
+        $this->api('POST', "/claims/$first", 2, ['action' => 'accept']);
+        $results = Post::query()->where('type', 'bingo')->get()->filter(fn ($p) => $p->content['kind'] === 'results');
+        $this->assertCount(1, $results);
+        $this->assertSame(1, $results->first()->content['pending'], 'Sam\'s call is still waiting');
+
+        // Dana's win is overturned after the game ended: Sam's waiting call takes 1st, in the same post.
+        $this->api('POST', "/claims/$first", 2, ['action' => 'reject']);
+        $this->api('POST', "/claims/$second", 2, ['action' => 'accept']);
+        $results = Post::query()->where('type', 'bingo')->get()->filter(fn ($p) => $p->content['kind'] === 'results');
+        $this->assertCount(1, $results, 'updated, never posted twice');
+        $this->assertSame([[1, 4, 'sam']], $results->first()->content['winners']);
+        $this->assertSame(0, $results->first()->content['pending']);
+        $this->assertFalse($results->first()->content['open']);
+    }
+
+    #[Test]
+    public function two_calls_racing_for_one_place_cannot_both_win()
+    {
+        $game = $this->create(['verify' => 'trust', 'places' => 1])['game'];
+        $this->fillRow($game['id'], 3, 0);
+        $this->fillRow($game['id'], 4, 1);
+        $this->afterGrace();
+
+        // Both requests loaded the game while it was live; the second must see the first's win under the lock.
+        $stale1 = Game::query()->find($game['id']);
+        $stale2 = Game::query()->find($game['id']);
+        $referee = $this->app()->getContainer()->make(Referee::class);
+        $a = $referee->call($stale1, Player::query()->where('user_id', 3)->first(), User::query()->find(3));
+        $b = $referee->call($stale2, Player::query()->where('user_id', 4)->first(), User::query()->find(4));
+
+        $this->assertInstanceOf(Claim::class, $a);
+        $this->assertSame('bingo_over', $b);
+        $this->assertSame(1, Claim::query()->count());
+    }
+
+    #[Test]
+    public function a_moderator_who_plays_cannot_referee_the_game()
+    {
+        $game = $this->create(['verify' => 'host', 'places' => 3])['game'];
+        $card = $this->fillRow($game['id'], 1, 0);
+        [, $state] = $this->api('POST', "/games/{$game['id']}/call", 1);
+        $this->assertFalse($state['game']['canReferee']);
+
+        [$status, $body] = $this->api('POST', "/squares/{$card[0]}", 1, ['confirmed' => true]);
+        $this->assertSame(403, $status);
+        $this->assertSame('bingo_player_cannot_referee', $body['errors'][0]['code']);
+        $this->assertSame(403, $this->api('POST', "/claims/{$state['claims'][0]['id']}", 1, ['action' => 'accept'])[0]);
+        $this->assertSame(200, $this->api('POST', "/claims/{$state['claims'][0]['id']}", 2, ['action' => 'accept'])[0], 'the host still can');
+    }
+
+    #[Test]
+    public function the_free_centre_can_be_switched_off_until_someone_has_a_card()
+    {
+        $game = $this->create()['game'];
+        [$status, $state] = $this->api('PATCH', "/games/{$game['id']}", 2, ['freeCenter' => false]);
+        $this->assertSame(200, $status);
+        $this->assertFalse($state['game']['freeCenter']);
+
+        [, $state] = $this->api('POST', "/games/{$game['id']}/join", 3);
+        $this->assertNotContains(0, $state['me']['card']);
+
+        // Locked once a card exists.
+        $this->api('PATCH', "/games/{$game['id']}", 2, ['freeCenter' => true]);
+        $this->assertFalse(Game::query()->find($game['id'])->free_center);
+    }
+
+    #[Test]
+    public function the_pulse_remembers_missing_games()
+    {
+        $this->assertSame(404, $this->api('GET', '/games/999/pulse', null)[0]);
+        $this->assertSame(404, $this->api('GET', '/games/999/pulse', null)[0]);
+
+        // A new game replaces a remembered "missing".
+        $game = $this->create()['game'];
+        $this->assertSame(200, $this->api('GET', "/games/{$game['id']}/pulse", null)[0]);
+    }
+
+    #[Test]
+    public function the_pulse_needs_the_view_permission()
+    {
+        // Permissions are read once per process: take it away before the first request.
+        $this->database()->table('group_permission')->where('permission', 'bingo.view')->delete();
+        $this->assertSame(403, $this->api('GET', '/games/1/pulse', null)[0]);
     }
 }

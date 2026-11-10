@@ -19,6 +19,8 @@ export interface GameSummary {
   status: Status;
   startsAt: string;
   endsAt: string;
+  /** The schedule, for the editor; endsAt is when it ends or ended. */
+  scheduledEndsAt?: string;
   endedEarly: boolean;
   freeCenter: boolean;
   places: number;
@@ -36,6 +38,8 @@ export interface GameDetail extends GameSummary {
   description: string | null;
   freeLabel: string | null;
   canManage: boolean;
+  /** Confirms squares and rules on calls: the host, or a moderator with no card here. */
+  canReferee: boolean;
   locked: boolean;
 }
 

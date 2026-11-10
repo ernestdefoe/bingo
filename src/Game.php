@@ -23,8 +23,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $verify
  * @property Carbon $starts_at
  * @property Carbon $ends_at
- * @property bool $ended_early
- * @property Carbon|null $results_posted_at
+ * @property Carbon|null $finished_at
+ * @property bool $finished_by_host
+ * @property int|null $results_post_id
  * @property int $revision
  * @property int $players_count
  * @property Carbon $created_at
@@ -50,8 +51,9 @@ class Game extends AbstractModel
         'places' => 'integer',
         'starts_at' => 'datetime',
         'ends_at' => 'datetime',
-        'ended_early' => 'boolean',
-        'results_posted_at' => 'datetime',
+        'finished_at' => 'datetime',
+        'finished_by_host' => 'boolean',
+        'results_post_id' => 'integer',
         'revision' => 'integer',
         'players_count' => 'integer',
         'created_at' => 'datetime',
@@ -61,8 +63,30 @@ class Game extends AbstractModel
     public function status(): string
     {
         $now = Carbon::now();
+        if ($now < $this->starts_at && ! $this->finished_at) {
+            return self::UPCOMING;
+        }
 
-        return $now < $this->starts_at ? self::UPCOMING : ($now < $this->ends_at ? self::LIVE : self::FINISHED);
+        return $now < $this->endedAt() ? self::LIVE : self::FINISHED;
+    }
+
+    /** When it is (or was) over: early if every place was won or the host ended it, else on schedule. */
+    public function endedAt(): Carbon
+    {
+        return $this->finished_at && $this->finished_at < $this->ends_at ? $this->finished_at : $this->ends_at;
+    }
+
+    /**
+     * Take the row lock for the rest of the transaction and bring this copy
+     * up to date: a call, a confirmation and a ruling on the same game then
+     * run one after another, each seeing what the one before decided.
+     */
+    public function lock(): static
+    {
+        $fresh = static::query()->whereKey($this->id)->lockForUpdate()->firstOrFail();
+        $this->setRawAttributes($fresh->getAttributes(), true);
+
+        return $this;
     }
 
     public function isLive(): bool
@@ -74,6 +98,18 @@ class Game extends AbstractModel
     public function canManage(User $actor): bool
     {
         return ! $actor->isGuest() && ($actor->can(Settings::MODERATE) || $actor->id === $this->user_id);
+    }
+
+    /**
+     * Confirms squares and rules on calls: the host or a moderator who has
+     * no card in this game. A moderator who plays is a player here, and
+     * can't confirm their own squares or rule on their own call.
+     */
+    public function canReferee(User $actor, ?bool $playing = null): bool
+    {
+        $playing ??= ! $actor->isGuest() && Player::query()->where('game_id', $this->id)->where('user_id', $actor->id)->exists();
+
+        return $this->canManage($actor) && ! $playing;
     }
 
     public function slug(): string

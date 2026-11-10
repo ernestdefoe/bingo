@@ -335,6 +335,8 @@ ernestdefoe-bingo:
       called: "{username} called Bingo on {line} in {game}!"
       results: "{game} is over."
       no_winner: Nobody got Bingo this time.
+      reopened: "{game} is back on: a place opened up after a ruling."
+      pending: "{count, plural, one {One call is still being checked, so this may change.} other {# calls are still being checked, so this may change.}}"
       started: "{username} started a Bingo game: {game}."
       play: Play
 
@@ -358,6 +360,7 @@ ernestdefoe-bingo:
       bingo_not_found: That Bingo game doesn't exist, or you can't see it.
       bingo_over: This game is over.
       bingo_not_started: This game hasn't started yet.
+      bingo_too_soon: The game just started. Nothing can have happened yet!
       bingo_not_player: Get your card first.
       bingo_host_cannot_play: You're hosting this game, so you referee instead of playing.
       bingo_bad_cell: That isn't a square on your card.
@@ -368,6 +371,7 @@ ernestdefoe-bingo:
       bingo_line_refused: A call on that line was already turned down.
       bingo_no_line: Your card doesn't have a full line yet.
       bingo_not_host: Only the host or a moderator can do that.
+      bingo_player_cannot_referee: You have a card in this game, so you can't confirm squares or rule on calls.
       bingo_bad_ruling: That isn't something the host can do with a call.
       bingo_cannot_dispute: You can't dispute this call.
       bingo_disputed_already: You already disputed this call.

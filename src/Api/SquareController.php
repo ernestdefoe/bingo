@@ -37,6 +37,9 @@ class SquareController implements RequestHandlerInterface
         if (! $game->canManage($actor)) {
             return Errors::make(403, 'bingo_not_host');
         }
+        if (! $game->canReferee($actor)) {
+            return Errors::make(403, 'bingo_player_cannot_referee');
+        }
         if ($game->status() === Game::UPCOMING) {
             return Errors::make(422, 'bingo_not_started');
         }

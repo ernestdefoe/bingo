@@ -2,8 +2,10 @@
 
 namespace ErnestDefoe\Bingo;
 
+use ErnestDefoe\Bingo\Job\BroadcastPulse;
 use Illuminate\Contracts\Cache\Repository as Cache;
 use Illuminate\Contracts\Container\Container;
+use Illuminate\Contracts\Queue\Queue;
 
 /**
  * The one number every open card watches. It goes up when something all
@@ -11,12 +13,14 @@ use Illuminate\Contracts\Container\Container;
  * edit); marking your own card does not move it. The poll reads it from
  * the cache, so a quiet game costs no query, and flarum/realtime (when it
  * is installed and running) pushes it so open cards refetch at once.
+ * A new game's first bump replaces a remembered "missing".
  */
 class Pulse
 {
     private const TTL = 86400;
+    private const MISSING = -1;
 
-    public function __construct(private readonly Container $container, private readonly Cache $cache)
+    public function __construct(private readonly Container $container, private readonly Cache $cache, private readonly Queue $queue)
     {
     }
 
@@ -30,18 +34,16 @@ class Pulse
         return $game->revision;
     }
 
+    /** The cached revision; null for a game that doesn't exist (remembered too, so made-up ids cost no query). */
     public function revision(int $gameId): ?int
     {
         $revision = $this->cache->get(self::key($gameId));
         if ($revision === null) {
-            $revision = Game::query()->whereKey($gameId)->value('revision');
-            if ($revision === null) {
-                return null;
-            }
-            $this->cache->put(self::key($gameId), (int) $revision, self::TTL);
+            $revision = (int) (Game::query()->whereKey($gameId)->value('revision') ?? self::MISSING);
+            $this->cache->put(self::key($gameId), $revision, $revision === self::MISSING ? 300 : self::TTL);
         }
 
-        return (int) $revision;
+        return $revision === self::MISSING ? null : (int) $revision;
     }
 
     public function forget(int $gameId): void
@@ -49,22 +51,11 @@ class Pulse
         $this->cache->forget(self::key($gameId));
     }
 
-    /**
-     * flarum/realtime binds its Pusher client; without it (or with the
-     * daemon down) this does nothing and the poll keeps cards fresh. Only
-     * the id and the number go out: what changed is fetched with the
-     * viewer's own permissions.
-     */
+    /** Queued (BroadcastPulse), and only when flarum/realtime is there to carry it. */
     private function broadcast(Game $game): void
     {
-        if (! class_exists(\Pusher\Pusher::class) || ! $this->container->bound(\Pusher\Pusher::class)) {
-            return;
-        }
-
-        try {
-            $this->container->make(\Pusher\Pusher::class)->trigger('public', 'bingo', ['id' => $game->id, 'rev' => $game->revision]);
-        } catch (\Throwable) {
-            // Realtime is down: the poll covers it.
+        if (class_exists(\Pusher\Pusher::class) && $this->container->bound(\Pusher\Pusher::class)) {
+            $this->queue->push(new BroadcastPulse($game->id, $game->revision));
         }
     }
 

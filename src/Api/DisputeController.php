@@ -10,6 +10,7 @@ use ErnestDefoe\Bingo\Presenter;
 use ErnestDefoe\Bingo\Referee;
 use ErnestDefoe\Bingo\Settings;
 use Flarum\Http\RequestUtil;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Arr;
 use Laminas\Diactoros\Response\JsonResponse;
 use Psr\Http\Message\ResponseInterface;
@@ -55,7 +56,12 @@ class DisputeController implements RequestHandlerInterface
             return Errors::make(429, 'bingo_slow_down');
         }
 
-        $this->referee->dispute($game, $claim, $actor, self::text(((array) $request->getParsedBody())['reason'] ?? null, 200));
+        try {
+            $this->referee->dispute($game, $claim, $actor, self::text(((array) $request->getParsedBody())['reason'] ?? null, 200));
+        } catch (QueryException) {
+            // A double tap that raced the first: the unique index kept it to one.
+            return Errors::make(422, 'bingo_disputed_already');
+        }
 
         return new JsonResponse($this->presenter->state($game, $actor));
     }
