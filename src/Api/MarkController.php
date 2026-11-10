@@ -4,6 +4,7 @@ namespace ErnestDefoe\Bingo\Api;
 
 use ErnestDefoe\Bingo\Card;
 use ErnestDefoe\Bingo\Player;
+use ErnestDefoe\Bingo\Settings;
 use ErnestDefoe\Bingo\Square;
 use Flarum\Http\RequestUtil;
 use Illuminate\Database\ConnectionInterface;
@@ -32,6 +33,8 @@ class MarkController implements RequestHandlerInterface
     {
         $actor = RequestUtil::getActor($request);
         $actor->assertRegistered();
+        // Checked on every tap, not just on joining: a suspended member stops playing at once.
+        $actor->assertCan(Settings::PLAY);
 
         $game = $this->game($request, $actor);
         if (! $game) {

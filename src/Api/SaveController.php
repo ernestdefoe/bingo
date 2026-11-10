@@ -92,7 +92,7 @@ class SaveController implements RequestHandlerInterface
         if ($error) {
             return Errors::make(422, $error);
         }
-        if ($this->limit->exceeded($actor, 'create', 5)) {
+        if ($this->limit->exceeded($actor, 'create', 5) || ($this->limit->dailyExceeded($actor, 'create', 20) && ! $actor->can(Settings::MODERATE))) {
             return Errors::make(429, 'bingo_slow_down');
         }
 
